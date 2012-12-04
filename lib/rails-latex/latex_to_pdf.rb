@@ -40,7 +40,10 @@ class LatexToPdf
       result=File.read(pdf_file)
       FileUtils.rm_rf(dir)
     else
-      raise "pdflatex failed: See #{input.sub(/\.tex$/,'.log')} for details"
+      filename  = input.sub(/\.tex$/,'.log') 
+      exception = LatexBuildException.new("pdflatex failed: See #{filename} for details")
+      exception.log_file = filename
+      raise exception
     end
     result
   end
@@ -83,4 +86,8 @@ class LatexToPdf
 
     @latex_escaper.latex_esc(text.to_s).html_safe
   end
+end
+
+class LatexBuildException < StandardError
+  attr_accessor :log_file
 end
