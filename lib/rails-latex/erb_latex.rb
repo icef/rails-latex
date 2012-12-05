@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 require 'fileutils'
+require 'pdf-reader'
 require 'rails-latex/latex_to_pdf'
 require 'rails-latex/latex_output_buffer'
 require 'action_view'

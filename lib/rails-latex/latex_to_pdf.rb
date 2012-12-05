@@ -1,51 +1,17 @@
 class LatexToPdf
-  def self.config
-    @config||={:command => 'pdflatex', :arguments => ['-halt-on-error'], :parse_twice => false}
-  end
-
   # Converts a string of LaTeX +code+ into a binary string of PDF.
   #
   # pdflatex is used to convert the file and creates the directory +#{Rails.root}/tmp/rails-latex/+ to store intermediate
   # files.
   #
   # The config argument defaults to LatexToPdf.config but can be overridden using @latex_config.
-  #
-  # The parse_twice argument is deprecated in favor of using config[:parse_twice] instead.
-  def self.generate_pdf(code,config,parse_twice=nil)
-    config=self.config.merge(config)
-    parse_twice=config[:parse_twice] if parse_twice.nil?
-    dir=File.join(Rails.root,'tmp','rails-latex',"#{Process.pid}-#{Thread.current.hash}")
-    input=File.join(dir,'input.tex')
-    FileUtils.mkdir_p(dir)
-    File.open(input,'wb') {|io| io.write(code) }
-    Process.waitpid(
-      fork do
-        begin
-          Dir.chdir dir
-          STDOUT.reopen("input.log","a")
-          STDERR.reopen(STDOUT)
-          args=config[:arguments] + %w[-shell-escape -interaction batchmode input.tex]
-          system config[:command],'-draftmode',*args if parse_twice
-          exec config[:command],*args
-        rescue
-          File.open("input.log",'a') {|io|
-            io.write("#{$!.message}:\n#{$!.backtrace.join("\n")}\n")
-          }
-        ensure
-          Process.exit! 1
-        end
-      end)
-    if File.exist?(pdf_file=input.sub(/\.tex$/,'.pdf'))
-      FileUtils.mv(input.sub(/\.tex$/,'.log'),File.join(dir,'..','input.log'))
-      result=File.read(pdf_file)
-      FileUtils.rm_rf(dir)
-    else
-      filename  = input.sub(/\.tex$/,'.log') 
-      exception = LatexBuildException.new("pdflatex failed: See #{filename} for details")
-      exception.log_file = filename
-      raise exception
-    end
-    result
+  def self.generate_pdf(tex_code, config)
+    generator = PdfGenerator.new(tex_code, config)
+    pdf_filename = generator.generate
+    pdf_document = PdfDocument.new(pdf_filename: pdf_filename)
+    generator.delete
+
+    pdf_document
   end
 
   # Generates a binary pdf from the given rails template
@@ -55,10 +21,9 @@ class LatexToPdf
     av.class_eval do
       include ApplicationHelper
     end
-    #av.render template: 'catalogues/listings', locals: { catalogue_listing: catalogue_listing}
-    tex = av.render template: template_name, formats: [:tex], locals: locals
 
-    return LatexToPdf.generate_pdf(tex, options)
+    tex = av.render template: template_name, formats: [:tex], locals: locals
+    self.generate_pdf(tex, options)
   end
 
   # Escapes LaTex special characters in text so that they wont be interpreted as LaTex commands.
@@ -74,7 +39,7 @@ class LatexToPdf
       else
         class << (@latex_escaper=Object.new)
           ESCAPE_RE=/([{}_$&%#])|([\\^~|<>])/
-          ESC_MAP={
+            ESC_MAP={
             '\\' => 'backslash',
             '^' => 'asciicircum',
             '~' => 'asciitilde',
@@ -101,6 +66,118 @@ class LatexToPdf
   end
 end
 
+class UnknownLatexBuildException < StandardError
+end
+
 class LatexBuildException < StandardError
   attr_accessor :log_file
+end
+
+class PdfDocument
+  attr_reader :pdf_filename, :pdf_content, :page_count
+  alias to_s pdf_content
+
+  def initialize(attributes = {})
+    attributes.each do |name, value|
+      send("#{name}=", value)
+    end
+  end
+
+  def pdf_filename=(filename)
+    @pdf_filename = filename
+    @pdf_content  = File.read(filename)
+    update_page_count!
+    filename
+  end
+
+  private
+
+  def update_page_count!
+    reader = PDF::Reader.new(pdf_filename)
+    @page_count = reader.page_count
+  end
+end
+
+class PdfGenerator
+  DEFAULT_CONFIG = { :command => 'pdflatex', :arguments => ['-halt-on-error'], :parse_twice => false }
+  attr_accessor :tex_code, :config
+
+  def initialize(tex_code, config = {})
+    self.tex_code = tex_code
+    self.config   = config
+  end
+
+  def generate
+    configuration = DEFAULT_CONFIG.merge(config)
+    create_directory  dir
+    write_tex_to_file tex_code
+    run_latex_command configuration
+    handle_result
+  end
+
+  def delete
+    FileUtils.rm_rf(dir)
+  end
+
+  private
+
+  def handle_result
+    if File.exist?(pdf_file)
+      return pdf_file
+    else
+      exception = nil
+      if File.exist?(log_file)
+        exception = LatexBuildException.new("pdflatex failed: See #{log_file} for details")
+        exception.log_file = log_file
+      else
+        exception = UnknownLatexBuildException.new("pdflatex failed for unknown reasons")
+      end
+      raise exception
+    end
+  end
+
+  def run_latex_command(configuration)
+    Process.waitpid(
+      fork do
+        begin
+          Dir.chdir dir
+          STDOUT.reopen(log_file,"a")
+          STDERR.reopen(STDOUT)
+          args = configuration[:arguments] + %w[-shell-escape -interaction batchmode input.tex]
+          system(configuration[:command], '-draftmode', *args) if configuration[:parse_twice]
+          exec(configuration[:command], *args)
+        rescue
+          File.open(log_file,'a') {|io|
+            io.write("#{$!.message}:\n#{$!.backtrace.join("\n")}\n")
+          }
+        ensure
+          Process.exit! 1
+        end
+      end
+    )
+  end
+
+  def pdf_file
+    input.sub(/\.tex$/,'.pdf')
+  end
+
+  def log_file
+    input.sub(/\.tex$/,'.log')
+  end
+
+  def write_tex_to_file(tex)
+    File.open(input,'wb') {|io| io.write(tex) }
+  end
+
+  def create_directory(directory)
+    FileUtils.mkdir_p(directory)
+  end
+
+  def input
+    @input ||= File.join(dir,'input.tex')
+  end
+
+  def dir
+    @dir ||= File.join(Rails.root,'tmp','rails-latex',"#{Process.pid}-#{Thread.current.hash}#{Time.now.to_f}")
+  end
 end
