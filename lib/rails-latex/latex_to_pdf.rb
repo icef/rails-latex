@@ -48,6 +48,19 @@ class LatexToPdf
     result
   end
 
+  # Generates a binary pdf from the given rails template
+  # The template has to be an tex template
+  def self.generate_pdf_from_template(template_name, locals, options)
+    av = ActionView::Base.new(Rails.configuration.paths["app/views"])
+    av.class_eval do
+      include ApplicationHelper
+    end
+    #av.render template: 'catalogues/listings', locals: { catalogue_listing: catalogue_listing}
+    tex = av.render template: template_name, formats: [:tex], locals: locals
+
+    return LatexToPdf.generate_pdf(tex, options)
+  end
+
   # Escapes LaTex special characters in text so that they wont be interpreted as LaTex commands.
   #
   # This method will use RedCloth to do the escaping if available.
