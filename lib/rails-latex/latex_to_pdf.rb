@@ -9,7 +9,7 @@ class LatexToPdf
     generator = PdfGenerator.new(tex_code, config)
     pdf_filename = generator.generate
     pdf_document = PdfDocument.new(pdf_filename: pdf_filename)
-    generator.delete
+    #generator.delete
 
     pdf_document
   end
@@ -178,6 +178,69 @@ class PdfGenerator
   end
 
   def dir
-    @dir ||= File.join(Rails.root,'tmp','rails-latex',"#{Process.pid}-#{Thread.current.hash}#{Time.now.to_f}")
+    @dir ||= File.join(Rails.root,'tmp','rails-latex',"pdf-#{Time.now.to_f}-#{Process.pid}-#{Thread.current.hash}")
+  end
+end
+
+class PdfMerger
+  DEFAULT_CONFIG = { :command => 'pdftk' }
+  attr_reader :input_filenames, :options
+
+  def initialize(filenames = [], options = {})
+    @input_filenames = filenames
+    @options         = options
+  end
+
+  def generate
+    configuration = DEFAULT_CONFIG.merge(options)
+    create_directory dir
+    Process.waitpid(
+      fork do
+        begin
+          args = [input_filenames, "cat", "output", filename].flatten
+          exec(configuration[:command], *args)
+        rescue
+          File.open(log_file,'a') {|io|
+            io.write("#{$!.message}:\n#{$!.backtrace.join("\n")}\n")
+          }
+        ensure
+          Process.exit! 1
+        end
+      end
+    )
+    if File.exist?(filename)
+      return filename
+    else
+      exception = nil
+      if File.exist?(log_file)
+        exception = LatexBuildException.new("pdftk failed: See #{log_file} for details")
+        exception.log_file = log_file
+      else
+        exception = UnknownLatexBuildException.new("pdftk failed for unknown reasons")
+      end
+      raise exception
+    end
+  end
+
+  def delete
+    FileUtils.rm_rf(dir)
+  end
+
+  private
+
+  def log_file
+    File.join(dir,'merged.log')
+  end
+
+  def filename
+    File.join(dir,'merged.pdf')
+  end
+
+  def create_directory(directory)
+    FileUtils.mkdir_p(directory)
+  end
+
+  def dir
+    @dir ||= File.join(Rails.root,'tmp','rails-latex',"merge-#{Time.now.to_f}-#{Process.pid}-#{Thread.current.hash}")
   end
 end
