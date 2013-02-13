@@ -1,7 +1,7 @@
 class LatexToPdf
   # Converts a string of LaTeX +code+ into a binary string of PDF.
   #
-  # pdflatex is used to convert the file and creates the directory +#{Rails.root}/tmp/rails-latex/+ to store intermediate
+  # xelatex is used to convert the file and creates the directory +#{Rails.root}/tmp/rails-latex/+ to store intermediate
   # files.
   #
   # The config argument defaults to LatexToPdf.config but can be overridden using @latex_config.
@@ -99,7 +99,7 @@ class PdfDocument
 end
 
 class PdfGenerator
-  DEFAULT_CONFIG = { :command => 'pdflatex', :arguments => ['-halt-on-error'], :parse_twice => false }
+  DEFAULT_CONFIG = { :command => 'xelatex', :arguments => ['-halt-on-error'], :parse_twice => false }
   attr_accessor :tex_code, :config
 
   def initialize(tex_code, config = {})
@@ -127,10 +127,10 @@ class PdfGenerator
     else
       exception = nil
       if File.exist?(log_file)
-        exception = LatexBuildException.new("pdflatex failed: See #{log_file} for details")
+        exception = LatexBuildException.new("xelatex failed: See #{log_file} for details")
         exception.log_file = log_file
       else
-        exception = UnknownLatexBuildException.new("pdflatex failed for unknown reasons")
+        exception = UnknownLatexBuildException.new("xelatex failed for unknown reasons")
       end
       raise exception
     end
