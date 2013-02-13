@@ -38,7 +38,7 @@ class TestLatexToPdf < Test::Unit::TestCase
       LatexToPdf.generate_pdf(IO.read(File.expand_path('../test_broken_doc.tex',__FILE__)),{})
       fail "Should throw exception"
     rescue => e
-      assert(/^xelatex failed: See / =~ e.message)
+      assert(/^lualatex failed: See / =~ e.message)
     end
   end
 
