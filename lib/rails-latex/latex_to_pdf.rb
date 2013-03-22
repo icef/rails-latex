@@ -38,7 +38,7 @@ class LatexToPdf
         end
       else
         class << (@latex_escaper=Object.new)
-          ESCAPE_RE=/([{}_$&%#])|([\\^~|<>])|https?:\/\/[\S]+/
+          ESCAPE_RE=/([{}_$&%#])|([\\^~|<>])|\b(([\w-]+:\/\/?|w{3}?[.])[^\s()]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/)))/
             ESC_MAP={
             '\\' => 'backslash',
             '^' => 'asciicircum',
@@ -52,7 +52,7 @@ class LatexToPdf
             text.gsub(ESCAPE_RE) {|m|
               if $1
                 "\\#{m}"
-              elsif m.include?('www.')
+              elsif $3
                 "\\url{#{m}}"
               else
                 "\\text#{ESC_MAP[m]}{}"
