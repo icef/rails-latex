@@ -49,12 +49,18 @@ class LatexToPdf
           }
 
           def latex_esc(text)   # :nodoc:
-            text.gsub(ESCAPE_RE) {|m|
-              if $1
-                "\\#{m}"
-              else
-                "\\text#{ESC_MAP[m]}{}"
-              end
+            text.gsub(/https?:\/\/[\S]+/) {|n|
+            if $1
+              "\\url{n}"
+            else
+              text.gsub(ESCAPE_RE) {|m|
+                  if $1
+                    "\\#{m}"
+                  else
+                    "\\text#{ESC_MAP[m]}{}"
+                  end
+                }
+            end
             }
           end
         end
