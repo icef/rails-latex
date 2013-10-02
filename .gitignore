@@ -10,3 +10,4 @@ examples/rails-latex-demo/log
 examples/rails-latex-demo/tmp
 *#*#
 .#*
+.idea
