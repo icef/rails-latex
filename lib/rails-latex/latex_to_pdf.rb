@@ -38,7 +38,7 @@ class LatexToPdf
         end
       else
         class << (@latex_escaper=Object.new)
-          ESCAPE_RE=/([{}_$&%#])|([\\^~|<>])|\b(([\w-]+:\/\/?|\sw{3}?[.])[^\s()]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/)))/
+          ESCAPE_RE=/([{}_$&%#])|([\\^~|<>])|\b(([\w-]+:\/\/?|\sw{3}?[.])[^\s()]+(?:\([\w\d]+\)|([^[:punct:]\s]|\/)))|([\]\[])/
             ESC_MAP={
             '\\' => 'backslash',
             '^' => 'asciicircum',
@@ -46,6 +46,8 @@ class LatexToPdf
             '|' => 'bar',
             '<' => 'less',
             '>' => 'greater',
+            '[' => '{[',
+            ']' => ']}'
           }
 
           def latex_esc(text)   # :nodoc:
@@ -54,6 +56,8 @@ class LatexToPdf
                 "\\#{m}"
               elsif $3
                 "\\url{#{m}}"
+              elsif $6
+                "#{ESC_MAP[m]}"
               else
                 "\\text#{ESC_MAP[m]}{}"
               end
